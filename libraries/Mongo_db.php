@@ -479,7 +479,7 @@ class Mongo_db {
 	 	$field = (string) trim($field);
 	 	$this->_where_init($field);
 	 	$value = (string) trim($value);
-	 	$value = quotemeta($value);
+	 	//$value = quotemeta($value);
 	 	
 	 	if ($enable_start_wildcard !== TRUE)
 	 	{
@@ -610,6 +610,7 @@ class Mongo_db {
 		}
 	 		 	
 	 	$documents = $this->db->{$collection}->find($this->wheres, $this->selects)->limit((int) $this->limit)->skip((int) $this->offset)->sort($this->sorts);
+	 	
 	 	
 	 	// Clear
 	 	$this->_clear();
@@ -1218,7 +1219,31 @@ class Mongo_db {
 	*	@usage : $this->mongo_db->add_index($collection, array('first_name' => 'ASC', 'last_name' => -1), array('unique' => TRUE));
 	*/
 	
-	public function add_index($collection = "", $keys = array(), $options = array())
+	public function add_index($collection = "", $indexes = array())
+	{
+		if (empty($collection))
+		{
+			show_error("No Mongo collection specified to add index to", 500);
+		}
+		
+		if (empty($indexes) || ! is_array($indexes))
+		{
+			show_error("Index could not be created to MongoDB Collection because no keys were specified", 500);
+		}
+
+		if ($this->db->{$collection}->ensureIndex($indexes) == TRUE)
+		{
+			$this->_clear();
+			return ($this);
+		}
+		else
+		{
+			show_error("An error occured when trying to add an index to MongoDB Collection", 500);
+		}			
+	}
+	
+	
+	/*public function add_index($collection = "", $keys = array(), $options = array())
 	{
 		if (empty($collection))
 		{
@@ -1251,7 +1276,7 @@ class Mongo_db {
 		{
 			show_error("An error occured when trying to add an index to MongoDB Collection", 500);
 		}
-	}
+	}*/
 	
 	
 	
@@ -1557,6 +1582,67 @@ class Mongo_db {
 			$this->updates[ $method ] = array();
 		}
 	}
+	
+	/**
+	*	--------------------------------------------------------------------------------
+	*	Extended 'Like' search with UTF-8 accent characters
+	* 	@author	Stéphane Legouffe
+	*	Inspired by Rafael Goulart | http://tech.rgou.net/en/php/pesquisas-nao-sensiveis-ao-caso-e-acento-no-mongodb-e-php/
+	*   Also inspired by boukeversteegh@gmail.com | http://fr.php.net/manual/fr/function.mb-split.php
+	*	--------------------------------------------------------------------------------
+	*
+	*	Prepares RegEx for UTF-8 strings search
+	*/
+	
+	private function accentToRegex($method)
+	{
+		$accent = "ŠŒŽšœžŸ¥µÀÁÂÃÄÅÆÇÈÉÊËẼÌÍÎÏĨÐÑÒÓÔÕÖØÙÚÛÜÝßàáâãäåæçèéêëẽìíîïĩðñòóôõöøùúûüýÿ";
+		$no_accent = "SOZsozYYuAAAAAAACEEEEEIIIIIDNOOOOOOUUUUYsaaaaaaaceeeeeiiiiionoooooouuuuyy";
+		
+		$from = mb_str_split($accent); 
+		$to = str_split(strtolower($no_accent));
+		$text = utf8_decode($text);
+		$regex = array();
+		 
+		foreach ($to as $key => $value)
+		{
+			if (isset($regex[$value]))
+			{
+				$regex[$value] .= $from[$key];
+			} 
+			else 
+			{
+				$regex[$value] = $value;
+			}
+		}
+		 
+		foreach ($regex as $rg_key => $rg)
+		{
+			$text = preg_replace("/[$rg]/", "_{$rg_key}_", $text);
+		}
+		 
+		foreach ($regex as $rg_key => $rg)
+		{
+			$text = preg_replace("/_{$rg_key}_/", "[$rg]", $text);
+		}
+		
+		return $text;
+	}
+	
+	/**
+	*	--------------------------------------------------------------------------------
+	*	This function splits a multibyte string into an array of characters
+	*   From by boukeversteegh@gmail.com | http://fr.php.net/manual/fr/function.mb-split.php
+	*	--------------------------------------------------------------------------------
+	*
+	*/
+	function mb_str_split( $string ) { 
+	    # Split at all position not after the start: ^ 
+	    # and not before the end: $ 
+	    return preg_split('/(?<!^)(?!$)/u', $string ); 
+	} 
+	
+	
 	
 }
 
